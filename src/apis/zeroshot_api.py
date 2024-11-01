@@ -6,6 +6,7 @@ import logging
 from scipy.stats import wasserstein_distance
 from src.apis.gtt_api import GTTAPI
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 logger = logging.getLogger(__name__)
 
@@ -113,20 +114,131 @@ def forecast(df, targets, covariates, timefeat, pred_len, pred_start, modelpath,
     
     return res
             
+# def plot_res(res):
+#     colors = ['r','g','b','c','m','y']
+#     split_pos = res['forecast_start']
+#     plt.figure(1)
+#     k = 0
+#     for target_var in res['targets']:
+#         plt.subplot(len(res['targets']),1,1+k)
+#         plt.plot(res['xdata'][:len(target_var['values'])], target_var['values'], "k-",label=target_var['name'])
+#         plt.plot(res['xdata'][split_pos:], target_var['preds'], colors[k%6]+"-",label='Forecast')
+#         plt.axvline(x = res['xdata'][split_pos], ls='--',color="y")
+        
+#         plt.legend(loc='best', prop={'size': 6})
+#         k+=1
+#     plt.show()
+
+
 def plot_res(res):
     colors = ['r','g','b','c','m','y']
     split_pos = res['forecast_start']
-    plt.figure(1)
+    
+    # Create figure with specified size and higher DPI
+    plt.figure(figsize=(15, 4*len(res['targets'])), dpi=100)
+    
     k = 0
     for target_var in res['targets']:
-        plt.subplot(len(res['targets']),1,1+k)
-        plt.plot(res['xdata'][:len(target_var['values'])], target_var['values'], "k-",label=target_var['name'])
-        plt.plot(res['xdata'][split_pos:], target_var['preds'], colors[k%6]+"-",label='Forecast')
-        plt.axvline(x = res['xdata'][split_pos], ls='--',color="y")
+        # Add subplot with adjusted height ratios
+        plt.subplot(len(res['targets']), 1, 1+k)
+        plt.plot(res['xdata'][:len(target_var['values'])], target_var['values'], "k-", label=target_var['name'])
+        plt.plot(res['xdata'][split_pos:], target_var['preds'], colors[k%6]+"-", label='Forecast')
+        plt.axvline(x = res['xdata'][split_pos], ls='--', color="y")
         
         plt.legend(loc='best', prop={'size': 6})
-        k+=1
+        k += 1
+    
+    # Adjust layout to prevent overlap and use full width
+    plt.tight_layout()
+    
+    # Adjust margins to maximize width usage
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+    
     plt.show()
+
+from plotly.subplots import make_subplots
+
+def plot_res_plotly(res):
+    """
+    Create a full-width forecast visualization using Plotly
+    
+    Parameters:
+        res (dict): Dictionary containing forecast results with the following keys:
+            - forecast_start: int, index where forecast starts
+            - targets: list of dicts, each containing:
+                - values: list/array of actual values
+                - preds: list/array of predicted values
+                - name: str, name of the target variable
+            - xdata: list/array of x-axis values (dates or indices)
+    """
+    # Create subplots, one for each target
+    n_targets = len(res['targets'])
+    fig = make_subplots(rows=n_targets, cols=1, 
+                        shared_xaxes=True,
+                        vertical_spacing=0.05)
+
+    # Colors for different forecasts
+    colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+    
+    # Add traces for each target
+    for i, target_var in enumerate(res['targets'], 1):
+        # Add actual values
+        fig.add_trace(
+            go.Scatter(
+                x=res['xdata'][:len(target_var['values'])],
+                y=target_var['values'],
+                name=f"{target_var['name']} (Actual)",
+                line=dict(color='black'),
+                showlegend=True
+            ),
+            row=i, col=1
+        )
+        
+        # Add forecast values
+        fig.add_trace(
+            go.Scatter(
+                x=res['xdata'][res['forecast_start']:],
+                y=target_var['preds'],
+                name=f"{target_var['name']} (Forecast)",
+                line=dict(color=colors[i % 6]),
+                showlegend=True
+            ),
+            row=i, col=1
+        )
+        
+        # Add vertical line at forecast start
+        fig.add_vline(
+            x=res['xdata'][res['forecast_start']],
+            line_dash="dash",
+            line_color="yellow",
+            row=i
+        )
+        
+        # Update y-axis title
+        fig.update_yaxes(title_text=target_var['name'], row=i, col=1)
+
+    # Update layout for full width and better appearance
+    fig.update_layout(
+        height=300 * n_targets,  # Scale height with number of subplots
+        width=None,  # Allow full width
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            font=dict(size=10)
+        ),
+        margin=dict(l=60, r=20, t=40, b=40)
+    )
+    
+    # Make it fill the container width
+    fig.update_layout(
+        template='plotly_white',
+        autosize=True
+    )
+    
+    return fig
 
 if __name__ == '__main__':
     df = pd.read_csv('../../datasets/Air_Passengers.csv')
